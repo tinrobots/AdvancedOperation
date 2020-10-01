@@ -6,7 +6,7 @@ import Foundation
 /// Use a `GroupOperation` to associate related operations together, thereby creating higher levels of abstractions.
 open class GroupOperation: AsynchronousOperation {
   // MARK: - Public Properties
-
+  
   /// The maximum number of queued operations that can execute at the same time inside the `GroupOperation`.
   ///
   /// The value in this property affects only the operations that the current GroupOperation has executing at the same time.
@@ -15,7 +15,7 @@ open class GroupOperation: AsynchronousOperation {
     get { operationQueue.maxConcurrentOperationCount }
     set { operationQueue.maxConcurrentOperationCount = newValue }
   }
-
+  
   /// The relative amount of importance for granting system resources to the operation.
   public override var qualityOfService: QualityOfService {
     get { operationQueue.qualityOfService }
@@ -24,9 +24,9 @@ open class GroupOperation: AsynchronousOperation {
       operationQueue.qualityOfService = newValue
     }
   }
-
+  
   // MARK: - Private Properties
-
+  
   private let dispatchGroup = DispatchGroup()
   private let dispatchQueue = DispatchQueue(label: "\(identifier).GroupOperation.serialQueue")
   private var tokens = [NSKeyValueObservation]()
@@ -34,9 +34,9 @@ open class GroupOperation: AsynchronousOperation {
     $0.isSuspended = true
     return $0
   }(OperationQueue())
-
+  
   // MARK: - Initializers
-
+  
   /// Creates a new `GroupOperation`.
   /// - Parameters:
   ///   - underlyingQueue: The dispatch queue used to execute operations (the default value is nil).
@@ -46,7 +46,7 @@ open class GroupOperation: AsynchronousOperation {
     self.operationQueue.underlyingQueue = underlyingQueue
     operations.forEach { addOperation($0) }
   }
-
+  
   /// Creates a new `GroupOperation`.
   /// - Parameters:
   ///   - underlyingQueue: The dispatch queue used to execute operations (the default value is nil).
@@ -54,14 +54,14 @@ open class GroupOperation: AsynchronousOperation {
   public convenience init(underlyingQueue: DispatchQueue? = nil, operations: Operation...) {
     self.init(underlyingQueue: underlyingQueue, operations: operations)
   }
-
+  
   deinit {
     tokens.forEach { $0.invalidate() }
     tokens.removeAll()
   }
-
+  
   // MARK: - Public Methods
-
+  
   ///  The default implementation of this method executes the scheduled operations.
   ///  If you override this method to perform the desired task,  invoke super in your implementation as last statement.
   ///  This method will automatically execute within an autorelease pool provided by Operation, so you do not need to create your own autorelease pool block in your implementation.
@@ -69,17 +69,17 @@ open class GroupOperation: AsynchronousOperation {
     if #available(iOS 13.0, iOSApplicationExtension 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *) {
       progress.addChild(operationQueue.progress, withPendingUnitCount: 1)
     }
-
+    
     guard !isCancelled else {
       self.finish()
       return
     }
-
+    
     // Debug only: count how many tasks have entered the dispatchGroup
     // let entersCount = dispatchGroup.debugDescription
     // .components(separatedBy: ",").filter({$0.contains("count")}).first?
     // .components(separatedBy: CharacterSet.decimalDigits.inverted).compactMap{Int($0)}.first
-
+    
     // 1. configuration started: enter the group
     // Without entering the group here, the notify block could be called before firing the queue if no operations were added.
     dispatchGroup.enter()
@@ -93,7 +93,7 @@ open class GroupOperation: AsynchronousOperation {
     // 4. configuration finished: leave the group
     dispatchGroup.leave()
   }
-
+  
   public final override func cancel() {
     dispatchQueue.sync {
       super.cancel()
@@ -102,7 +102,7 @@ open class GroupOperation: AsynchronousOperation {
       // and the operations will be cancelled without having a chance to finish.
     }
   }
-
+  
   /// Adds new `operations` to the `GroupOperation`.
   ///
   /// If the `GroupOperation` is already cancelled,  the new  operations will be cancelled before being added.
@@ -110,56 +110,83 @@ open class GroupOperation: AsynchronousOperation {
   public func addOperations(_ operations: Operation...) {
     dispatchQueue.sync {
       guard !isFinished else { return }
-
+      
       operations.forEach { operation in
         // 1. observe when the operation finishes
         dispatchGroup.enter()
-        let finishToken = operation.observe(\.isFinished, options: [.old, .new]) { [weak self] (_, changes) in
-          guard let self = self else { return }
-          guard
-            let oldValue = changes.oldValue,
-            let newValue = changes.newValue,
-            oldValue != newValue, newValue
-          else { return }
-
-          self.dispatchGroup.leave()
-        }
-        tokens.append(finishToken)
-
+        operation.addObserver(self, forKeyPath: #keyPath(Operation.isFinished), options: [.new, .old], context: nil)
+        //        let finishToken = operation.observe(\.isFinished, options: [.old, .new]) { [weak self] (_, changes) in
+        //          guard let self = self else { return }
+        //          guard
+        //            let oldValue = changes.oldValue,
+        //            let newValue = changes.newValue,
+        //            oldValue != newValue, newValue
+        //          else { return }
+        //
+        //          self.dispatchGroup.leave()
+        //        }
+        //        tokens.append(finishToken)
+        
         // If the GroupOperation is cancelled, operations will be cancelled before being added to the queue.
         if isCancelled {
           operation.cancel()
         } else {
           // 2. observe when the operation gets cancelled if it's not cancelled yet
-          let cancelToken = operation.observe(\.isCancelled, options: [.old, .new]) { [weak self] (operation, changes) in
-            guard let self = self else { return }
-            guard let oldValue = changes.oldValue, let newValue = changes.newValue, oldValue != newValue, newValue else { return }
-
-            if #available(iOS 13.0, iOSApplicationExtension 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *) {
-              // if the cancelled operation is executing, the queue progress will be updated when the operation finishes
-              if !operation.isExecuting && self.operationQueue.progress.totalUnitCount > 0 {
-                self.operationQueue.progress.totalUnitCount -= 1
-              }
-            }
-          }
-          tokens.append(cancelToken)
-
+          //          let cancelToken = operation.observe(\.isCancelled, options: [.old, .new]) { [weak self] (operation, changes) in
+          //            guard let self = self else { return }
+          //            guard let oldValue = changes.oldValue, let newValue = changes.newValue, oldValue != newValue, newValue else { return }
+          //
+          //            if #available(iOS 13.0, iOSApplicationExtension 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *) {
+          //              // if the cancelled operation is executing, the queue progress will be updated when the operation finishes
+          //              if !operation.isExecuting && self.operationQueue.progress.totalUnitCount > 0 {
+          //                self.operationQueue.progress.totalUnitCount -= 1
+          //              }
+          //            }
+          //          }
+          //          tokens.append(cancelToken)
+          
+          operation.addObserver(self, forKeyPath: #keyPath(Operation.isCancelled), options: [.new, .old], context: nil)
+          
           // the progress totalUnitCount is increased by 1 only if the operation is not cancelled
           if #available(iOS 13.0, iOSApplicationExtension 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *) {
             operationQueue.progress.totalUnitCount += 1
           }
         }
-
+        
         operationQueue.addOperation(operation)
       }
     }
   }
-
+  
   /// Adds a new `operation` to the `GroupOperation`.
   ///
   /// If the `GroupOperation` is already cancelled,  the new  operation will be cancelled before being added.
   /// If the `GroupOperation` is finished, the new operation will be ignored.
   public final func addOperation(_ operation: Operation) {
     addOperations(operation)
+  }
+  
+  open override func observeValue(forKeyPath keyPath: String?, of object: Any?, change: [NSKeyValueChangeKey : Any]?, context: UnsafeMutableRawPointer?) {
+    guard let operation = object as? Operation else { return }
+    guard let oldValue = change?[NSKeyValueChangeKey.oldKey] as? Bool else { return }
+    guard let newValue = change?[NSKeyValueChangeKey.newKey] as? Bool else { return }
+    guard let keyPath = keyPath else { return }
+    guard  newValue != oldValue else { return }
+    
+    switch keyPath {
+    case #keyPath(Operation.isFinished):
+      self.dispatchGroup.leave()
+    case #keyPath(Operation.isCancelled):
+      if #available(iOS 13.0, iOSApplicationExtension 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *) {
+        // if the cancelled operation is executing, the queue progress will be updated when the operation finishes
+        if !operation.isExecuting && self.operationQueue.progress.totalUnitCount > 0 {
+          self.operationQueue.progress.totalUnitCount -= 1
+        }
+      }
+    default:
+      break
+    }
+    
+    
   }
 }
