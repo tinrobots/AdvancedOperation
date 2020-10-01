@@ -29,11 +29,7 @@ open class GroupOperation: AsynchronousOperation {
 
   private let dispatchGroup = DispatchGroup()
   private let dispatchQueue = DispatchQueue(label: "\(identifier).GroupOperation.serialQueue")
-  private var _tokens = [NSKeyValueObservation]()
-  
-  private var finishTokensByOperationID = [ObjectIdentifier: NSKeyValueObservation]()
-  private var cancelTokensByOperationID = [ObjectIdentifier: NSKeyValueObservation]()
-  
+  private var tokens = [NSKeyValueObservation]()
   private lazy var operationQueue: OperationQueue = {
     $0.isSuspended = true
     return $0
@@ -60,10 +56,8 @@ open class GroupOperation: AsynchronousOperation {
   }
 
   deinit {
-    // tokens.forEach { $0.invalidate() }
-    // tokens.removeAll()
-    //finishTokensByOperationID.removeAll()
-    //cancelTokensByOperationID.removeAll()
+    tokens.forEach { $0.invalidate() }
+    tokens.removeAll()
   }
 
   // MARK: - Public Methods
@@ -118,7 +112,6 @@ open class GroupOperation: AsynchronousOperation {
       guard !isFinished else { return }
 
       operations.forEach { operation in
-        let id = ObjectIdentifier(operation)
         // 1. observe when the operation finishes
         dispatchGroup.enter()
         let finishToken = operation.observe(\.isFinished, options: [.old, .new]) { [weak self] (_, changes) in
@@ -129,12 +122,9 @@ open class GroupOperation: AsynchronousOperation {
             oldValue != newValue, newValue
           else { return }
 
-          let id = ObjectIdentifier(operation)
-          self.finishTokensByOperationID[id]?.invalidate()
           self.dispatchGroup.leave()
         }
-        //tokens.append(finishToken)
-        finishTokensByOperationID[id] = finishToken
+        tokens.append(finishToken)
 
         // If the GroupOperation is cancelled, operations will be cancelled before being added to the queue.
         if isCancelled {
@@ -151,11 +141,8 @@ open class GroupOperation: AsynchronousOperation {
                 self.operationQueue.progress.totalUnitCount -= 1
               }
             }
-            let id = ObjectIdentifier(operation)
-            self.cancelTokensByOperationID[id]?.invalidate()
           }
-          //tokens.append(cancelToken)
-          cancelTokensByOperationID[id] = cancelToken
+          tokens.append(cancelToken)
 
           // the progress totalUnitCount is increased by 1 only if the operation is not cancelled
           if #available(iOS 13.0, iOSApplicationExtension 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *) {
