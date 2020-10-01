@@ -29,7 +29,7 @@ open class GroupOperation: AsynchronousOperation {
   
   private let dispatchGroup = DispatchGroup()
   private let dispatchQueue = DispatchQueue(label: "\(identifier).GroupOperation.serialQueue")
-  private var tokens = [NSKeyValueObservation]()
+
   private lazy var operationQueue: OperationQueue = {
     $0.isSuspended = true
     return $0
@@ -53,11 +53,6 @@ open class GroupOperation: AsynchronousOperation {
   ///   - operations: Operations to be executed by the `GroupOperation`
   public convenience init(underlyingQueue: DispatchQueue? = nil, operations: Operation...) {
     self.init(underlyingQueue: underlyingQueue, operations: operations)
-  }
-  
-  deinit {
-    tokens.forEach { $0.invalidate() }
-    tokens.removeAll()
   }
   
   // MARK: - Public Methods
@@ -115,36 +110,12 @@ open class GroupOperation: AsynchronousOperation {
         // 1. observe when the operation finishes
         dispatchGroup.enter()
         operation.addObserver(self, forKeyPath: #keyPath(Operation.isFinished), options: [.new, .old], context: nil)
-        //        let finishToken = operation.observe(\.isFinished, options: [.old, .new]) { [weak self] (_, changes) in
-        //          guard let self = self else { return }
-        //          guard
-        //            let oldValue = changes.oldValue,
-        //            let newValue = changes.newValue,
-        //            oldValue != newValue, newValue
-        //          else { return }
-        //
-        //          self.dispatchGroup.leave()
-        //        }
-        //        tokens.append(finishToken)
         
         // If the GroupOperation is cancelled, operations will be cancelled before being added to the queue.
         if isCancelled {
           operation.cancel()
         } else {
           // 2. observe when the operation gets cancelled if it's not cancelled yet
-          //          let cancelToken = operation.observe(\.isCancelled, options: [.old, .new]) { [weak self] (operation, changes) in
-          //            guard let self = self else { return }
-          //            guard let oldValue = changes.oldValue, let newValue = changes.newValue, oldValue != newValue, newValue else { return }
-          //
-          //            if #available(iOS 13.0, iOSApplicationExtension 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *) {
-          //              // if the cancelled operation is executing, the queue progress will be updated when the operation finishes
-          //              if !operation.isExecuting && self.operationQueue.progress.totalUnitCount > 0 {
-          //                self.operationQueue.progress.totalUnitCount -= 1
-          //              }
-          //            }
-          //          }
-          //          tokens.append(cancelToken)
-          
           operation.addObserver(self, forKeyPath: #keyPath(Operation.isCancelled), options: [.new, .old], context: nil)
           
           // the progress totalUnitCount is increased by 1 only if the operation is not cancelled
