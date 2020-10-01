@@ -2,7 +2,6 @@
 
 import Foundation
 
-#if swift(<5.1)
 /// Workaround to solve some  multithreading bugs in Swift's KVO.
 /// This needs to execute before anything can register KVO in the background so the best way to do this is before the application ever runs
 ///
@@ -22,4 +21,3 @@ public final class KVOCrashWorkaround: NSObject {
     observer.invalidate()
   }
 }
-#endif
