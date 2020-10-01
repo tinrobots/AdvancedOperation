@@ -56,7 +56,7 @@ open class GroupOperation: AsynchronousOperation {
   }
 
   deinit {
-    tokens.forEach { $0.invalidate() }
+    // tokens.forEach { $0.invalidate() }
     tokens.removeAll()
   }
 
