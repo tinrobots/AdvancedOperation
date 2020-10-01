@@ -5,9 +5,9 @@ import XCTest
 
 final class GroupOperationTests: XCTestCase {
   override class func setUp() {
-    #if swift(<5.1)
+    //#if swift(<5.1)
     AdvancedOperation.KVOCrashWorkaround.installFix()
-    #endif
+    //#endif
   }
 
   func testSuccessfulExecution() {
