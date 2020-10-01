@@ -123,7 +123,6 @@ open class GroupOperation: AsynchronousOperation {
             operationQueue.progress.totalUnitCount += 1
           }
         }
-
         operationQueue.addOperation(operation)
       }
     }
