@@ -152,6 +152,7 @@ open class GroupOperation: AsynchronousOperation {
       dispatchGroup.leave()
     case #keyPath(Operation.isCancelled):
       operation.removeObserver(self, forKeyPath: keyPath)
+
       if #available(iOS 13.0, iOSApplicationExtension 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *) {
         // if the cancelled operation is executing, the queue progress will be updated when the operation finishes
         if !operation.isExecuting && self.operationQueue.progress.totalUnitCount > 0 {
