@@ -124,7 +124,7 @@ open class GroupOperation: AsynchronousOperation {
 
           self.dispatchGroup.leave()
         }
-        tokens.append(finishToken) 
+        tokens.append(finishToken)
 
         // If the GroupOperation is cancelled, operations will be cancelled before being added to the queue.
         if isCancelled {
