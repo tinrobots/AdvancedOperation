@@ -107,6 +107,14 @@ final class ProgressReportingTests: XCTestCase {
     wait(for: [expectation0], timeout: 5)
     token.invalidate()
   }
+  
+  @available(iOS 13.0, iOSApplicationExtension 13.0, macCatalyst 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+  func testStress() throws {
+    try (1...1000).forEach { (i) in
+      print(i)
+      try testProgressReportingWhenAddingOperationsToGroupOperationWhileIsBeingCancelled()
+    }
+  }
 
  @available(iOS 13.0, iOSApplicationExtension 13.0, macCatalyst 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
   func testProgressReportingWhenAddingOperationsToGroupOperationWhileIsBeingCancelled() throws {
@@ -126,7 +134,6 @@ final class ProgressReportingTests: XCTestCase {
 
     // cancellation is done while at least one operation is running
     operation3.onExecutionStarted = { [unowned groupOperation] in
-      print("cancelling group")
       groupOperation.cancel()
       groupOperation.addOperation(operation4)
     }

@@ -98,31 +98,37 @@ open class GroupOperation: AsynchronousOperation {
     }
   }
 
+  private static var myContext = 0
+  
   /// Adds new `operations` to the `GroupOperation`.
   ///
   /// If the `GroupOperation` is already cancelled,  the new  operations will be cancelled before being added.
   /// If the `GroupOperation` is finished, new operations will be ignored.
   public func addOperations(_ operations: Operation...) {
     dispatchQueue.sync {
-      guard !isFinished else { return }
+      guard !isFinished else { print("----"); return }
 
       operations.forEach { operation in
         // 1. observe when the operation finishes
         dispatchGroup.enter()
-        operation.addObserver(self, forKeyPath: #keyPath(Operation.isFinished), options: [.new, .old], context: nil)
-
+        print("add F observer for \(operation.operationName)")
+        operation.addObserver(self, forKeyPath: #keyPath(Operation.isFinished), options: [.new, .old], context: &Self.myContext)
+        print("add C observer for \(operation.operationName)")
+        // 2. observe when the operation gets cancelled
+        // Note: the observer is added also for cancelled operations (since reverting to objc KVO); this ensures that we
+        // don't end removing obsever that weren't added
+        operation.addObserver(self, forKeyPath: #keyPath(Operation.isCancelled), options: [.new, .old], context: &Self.myContext)
+        
         // If the GroupOperation is cancelled, operations will be cancelled before being added to the queue.
         if isCancelled {
           operation.cancel()
         } else {
-          // 2. observe when the operation gets cancelled if it's not cancelled yet
-          operation.addObserver(self, forKeyPath: #keyPath(Operation.isCancelled), options: [.new, .old], context: nil)
-
           // the progress totalUnitCount is increased by 1 only if the operation is not cancelled
           if #available(iOS 13.0, iOSApplicationExtension 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *) {
             operationQueue.progress.totalUnitCount += 1
           }
         }
+        
         operationQueue.addOperation(operation)
       }
     }
@@ -135,22 +141,36 @@ open class GroupOperation: AsynchronousOperation {
   public final func addOperation(_ operation: Operation) {
     addOperations(operation)
   }
-
+  
+  let lock = NSLock()
+  
   // swiftlint:disable:next block_based_kvo
   open override func observeValue(forKeyPath keyPath: String?, of object: Any?, change: [NSKeyValueChangeKey: Any]?, context: UnsafeMutableRawPointer?) {
+    lock.lock()
+    defer { lock.unlock() }
     // The Swift KVO system causes crashes during tests
+    guard context == &Self.myContext else { return }
     guard let operation = object as? Operation else { return }
+    
     guard let oldValue = change?[NSKeyValueChangeKey.oldKey] as? Bool else { return }
     guard let newValue = change?[NSKeyValueChangeKey.newKey] as? Bool else { return }
-    guard let keyPath = keyPath else { return }
+    
     guard newValue != oldValue else { return }
-
+    guard newValue else { return } // we are interesed only in changes where is finished or is cancelled are set to true.
+    
+    guard let keyPath = keyPath else { return }
+    
     switch keyPath {
     case #keyPath(Operation.isFinished):
-      operation.removeObserver(self, forKeyPath: keyPath)
+      print("removed F observer for \(operation.operationName)")
+      operation.removeObserver(self, forKeyPath: keyPath, context: &Self.myContext)
+      
       dispatchGroup.leave()
     case #keyPath(Operation.isCancelled):
-      operation.removeObserver(self, forKeyPath: keyPath)
+      print("removed C observer for \(operation.operationName): \(oldValue) -> \(newValue)")
+      operation.removeObserver(self, forKeyPath: #keyPath(Operation.isCancelled), context: &Self.myContext)
+      
+      //operation.removeObserver(self, forKeyPath: keyPath, context: &myContext)
       if #available(iOS 13.0, iOSApplicationExtension 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *) {
         // if the cancelled operation is executing, the queue progress will be updated when the operation finishes
         if !operation.isExecuting && self.operationQueue.progress.totalUnitCount > 0 {
