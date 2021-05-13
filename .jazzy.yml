@@ -1,7 +1,7 @@
-module: AdvancedOperation
+module: CoreDataAdvancedOperationPlus
 author: Alessandro Marzoli
-author_url: http://www.tinrobots.org
-github_url: https://github.com/tinrobots/advancedoperation
-copyright: "© 2016-2017 [Tin Robots](http://www.tinrobots.org)"
+author_url: http://www.alessandromarzoli.com
+github_url: http://www.alessandromarzoli.com/AdvancedOperation/
+copyright: "©[Alessandro Marzoli](http://www.alessandromarzoli.com)"
 clean: true
 podspec: AdvancedOperation.podspec
